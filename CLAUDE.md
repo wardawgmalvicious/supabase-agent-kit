@@ -22,12 +22,16 @@ fires in this repo itself, against whatever project `.env` points at.
 ## Commands
 
 No build and no test suite. Lint and format-check the script (both pass
-clean as of 2026-11-02):
+clean, re-run 2026-11-02), and check its three descriptions agree; the
+pre-commit hooks `shellcheck`, `shfmt` and `docs-in-step` run all three:
 
 ```bash
 shellcheck scripts/db/supabase-query.sh
 shfmt -d -i 4 -ci scripts/db/supabase-query.sh
+scripts/dev/check-docs-in-step.sh
 ```
+
+`scripts/dev/` is this repo's tooling, not part of the kit.
 
 The only end-to-end test is a live call, which needs a filled-in `.env`
 at the repo root (a local one exists and is gitignored):
@@ -69,7 +73,10 @@ block contiguous.
 
 Behavior is described in three places: the script header, the README,
 and `SKILL.md`. A change to flags, exit codes, the row cap or observed
-endpoint behavior needs all three updated. Observed, undocumented
+endpoint behavior needs all three updated. `scripts/dev/check-docs-in-step.sh`
+checks the flags, exit codes and row cap, and that `-h` prints the whole
+header, with its exceptions listed in the script; observed behavior and
+its dates it does not check. Observed, undocumented
 behavior is dated (for example "observed 2026-11-02"); keep that
 convention, and re-date a claim when you re-test it. The endpoint is
 marked beta by Supabase.

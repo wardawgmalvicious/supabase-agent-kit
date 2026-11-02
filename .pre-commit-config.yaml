@@ -55,6 +55,31 @@ repos:
         always_run: true
         stages: [pre-push]
 
+  # The script's lint and format check, as CLAUDE.md's Commands run them, and
+  # the check that its three descriptions agree. shellcheck and shfmt come from
+  # PATH: a clone without one skips it with a line rather than failing every
+  # commit, as identity-guard does. docs-in-step lists its own script in files:,
+  # since a hook whose script sits outside its pattern skips when only the
+  # script changes.
+  - repo: local
+    hooks:
+      - id: shellcheck
+        name: Lint shell scripts (shellcheck)
+        entry: bash -c 'command -v shellcheck > /dev/null || { echo "shellcheck skipped, not on PATH"; exit 0; }; exec shellcheck "$@"' shellcheck
+        language: system
+        files: \.sh$
+      - id: shfmt
+        name: Check shell script formatting (shfmt -i 4 -ci)
+        entry: bash -c 'command -v shfmt > /dev/null || { echo "shfmt skipped, not on PATH"; exit 0; }; exec shfmt -d -i 4 -ci "$@"' shfmt
+        language: system
+        files: \.sh$
+      - id: docs-in-step
+        name: Check the script header, README and SKILL.md agree
+        entry: bash scripts/dev/check-docs-in-step.sh
+        language: system
+        pass_filenames: false
+        files: ^(scripts/db/supabase-query\.sh|README\.md|\.claude/skills/query-supabase/SKILL\.md|scripts/dev/check-docs-in-step\.sh)$
+
 # The handoff queue's check, appended under `repos:` in the repo's
 # .pre-commit-config.yaml once a docs/handoffs/ exists. It runs the
 # triage-inbox skill's handoff-status.py, so no repo names the repo the
