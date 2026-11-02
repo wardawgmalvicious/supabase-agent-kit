@@ -49,8 +49,8 @@ die() {
     exit 2
 }
 
-for f in "$QUERY_SH" "$README" "$SKILL"; do
-    [[ -f "$f" ]] || die "missing $f"
+for required_file in "$QUERY_SH" "$README" "$SKILL"; do
+    [[ -f "$required_file" ]] || die "missing $required_file"
 done
 
 GAPS=0
@@ -59,12 +59,17 @@ gap() {
     GAPS=$((GAPS + 1))
 }
 
+# Text goes to grep and awk as a here-string, never a pipe: under pipefail a
+# grep -q or awk that exits early on a large text kills its writer with SIGPIPE,
+# and the pipe's 141 reads as a miss.
 # A flag as a word of its own: -q, not part of --quiet or read-quickly.
-has_flag() { grep -q -E -- "(^|[^[:alnum:]-])-$1([^[:alnum:]]|\$)"; }
-# The paragraph that starts with $1, through the next blank line.
-paragraph() { awk -v start="$1" 'index($0, start) == 1 { p = 1 } p && /^$/ { exit } p'; }
+has_flag() { grep -q -E -- "(^|[^[:alnum:]-])-$1([^[:alnum:]]|\$)" <<<"$2"; }
+# The paragraph of $2 that starts with $1, through the next blank line.
+paragraph() { awk -v start="$1" 'index($0, start) == 1 { p = 1 } p && /^$/ { exit } p' <<<"$2"; }
 
-HELP="$(bash "$QUERY_SH" -h)" || die "$QUERY_SH -h failed"
+# $BASH, the interpreter running this, not a PATH lookup, which from PowerShell
+# on Windows can find WSL's bash.
+HELP="$("$BASH" "$QUERY_SH" -h)" || die "$QUERY_SH -h failed"
 README_TEXT="$(cat "$README")"
 SKILL_TEXT="$(cat "$SKILL")"
 
@@ -75,7 +80,7 @@ HEADER_LINES="$(awk '/^# Run read-only SQL/ { p = 1 }
     p && !/^#/ && !/^$/ { exit }
     p { n++; if ($0 ~ /^#/) last = n }
     END { print last + 0 }' "$QUERY_SH")"
-HELP_LINES="$(printf '%s\n' "$HELP" | wc -l)"
+HELP_LINES="$(wc -l <<<"$HELP")"
 [[ "$HEADER_LINES" -gt 0 ]] || die "no header block starting '# Run read-only SQL' in $QUERY_SH"
 [[ "$HELP_LINES" -eq "$HEADER_LINES" ]] ||
     gap "-h prints $HELP_LINES of the header's $HEADER_LINES lines: a blank line splits the block"
@@ -85,36 +90,37 @@ OPTSTRING="$(sed -n -E 's/^while getopts "([^"]+)" opt.*/\1/p' "$QUERY_SH")"
 FLAGS="${OPTSTRING//:/}"
 [[ -n "$FLAGS" ]] || die "no getopts option string found in $QUERY_SH"
 
-for ((n = 0; n < ${#FLAGS}; n++)); do
-    flag="${FLAGS:n:1}"
+for ((flag_index = 0; flag_index < ${#FLAGS}; flag_index++)); do
+    flag="${FLAGS:flag_index:1}"
     [[ "$EXEMPT_FLAGS" == *"$flag"* ]] && continue
-    printf '%s\n' "$HELP" | has_flag "$flag" || gap "-$flag is missing from the script's header (-h)"
-    printf '%s\n' "$README_TEXT" | has_flag "$flag" || gap "-$flag is missing from README.md"
-    printf '%s\n' "$SKILL_TEXT" | has_flag "$flag" || gap "-$flag is missing from SKILL.md"
+    has_flag "$flag" "$HELP" || gap "-$flag is missing from the script's header (-h)"
+    has_flag "$flag" "$README_TEXT" || gap "-$flag is missing from README.md"
+    has_flag "$flag" "$SKILL_TEXT" || gap "-$flag is missing from SKILL.md"
 done
 
 # --- exit codes -----------------------------------------------------------------------
+# die's default is the N of ${2:-N}; the 2 before it is the argument's position.
 CODES="$(
     {
         grep -o -E '\bexit [0-9]+' "$QUERY_SH" | grep -o -E '[0-9]+$' || true
-        grep -o -E '\$\{2:-[0-9]+\}' "$QUERY_SH" | grep -o -E '[0-9]+' || true
+        sed -n -E 's/.*\$\{2:-([0-9]+)\}.*/\1/p' "$QUERY_SH"
         grep -E '\bdie .*" [0-9]+$' "$QUERY_SH" | grep -o -E '[0-9]+$' || true
     } | sort -u
 )"
 [[ -n "$CODES" ]] || die "no exit codes found in $QUERY_SH"
 
-HELP_EXIT="$(printf '%s\n' "$HELP" | paragraph 'Exit status:')"
-README_EXIT="$(printf '%s\n' "$README_TEXT" | paragraph 'Exit codes:')"
+HELP_EXIT="$(paragraph 'Exit status:' "$HELP")"
+README_EXIT="$(paragraph 'Exit codes:' "$README_TEXT")"
 [[ -n "$HELP_EXIT" ]] || gap "the script's header has no 'Exit status:' paragraph"
 [[ -n "$README_EXIT" ]] || gap "README.md has no 'Exit codes:' paragraph"
 
 for code in $CODES; do
-    printf '%s\n' "$HELP_EXIT" | grep -q -w -- "$code" ||
+    grep -q -w -- "$code" <<<"$HELP_EXIT" ||
         gap "exit $code is missing from the header's 'Exit status:' paragraph"
-    printf '%s\n' "$README_EXIT" | grep -q -w -- "$code" ||
+    grep -q -w -- "$code" <<<"$README_EXIT" ||
         gap "exit $code is missing from README.md's 'Exit codes:' paragraph"
     [[ "$EXEMPT_SKILL_CODES" == *"$code"* ]] && continue
-    printf '%s\n' "$SKILL_TEXT" | grep -q -i -E -- "\bexit $code\b" ||
+    grep -q -i -E -- "\bexit $code\b" <<<"$SKILL_TEXT" ||
         gap "exit $code is missing from SKILL.md"
 done
 
@@ -122,12 +128,12 @@ done
 CAP="$(sed -n -E 's/^MAX_ROWS="\$\{SUPABASE_QUERY_MAX_ROWS:-([0-9]+)\}".*/\1/p' "$QUERY_SH")"
 [[ -n "$CAP" ]] || die "no SUPABASE_QUERY_MAX_ROWS default found in $QUERY_SH"
 
-for doc in header README.md; do
-    if [[ "$doc" == header ]]; then text="$HELP"; else text="$README_TEXT"; fi
-    printf '%s\n' "$text" | grep -q -F SUPABASE_QUERY_MAX_ROWS ||
-        gap "SUPABASE_QUERY_MAX_ROWS is missing from the $doc"
-    printf '%s\n' "$text" | grep -q -w -- "$CAP" ||
-        gap "the row cap's default, $CAP, is missing from the $doc"
+for source_name in header README.md; do
+    if [[ "$source_name" == header ]]; then source_text="$HELP"; else source_text="$README_TEXT"; fi
+    grep -q -F SUPABASE_QUERY_MAX_ROWS <<<"$source_text" ||
+        gap "SUPABASE_QUERY_MAX_ROWS is missing from the $source_name"
+    grep -q -w -- "$CAP" <<<"$source_text" ||
+        gap "the row cap's default, $CAP, is missing from the $source_name"
 done
 
 if [[ "$GAPS" -gt 0 ]]; then

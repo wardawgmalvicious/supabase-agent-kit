@@ -58,7 +58,9 @@ repos:
   # The script's lint and format check, as CLAUDE.md's Commands run them, and
   # the check that its three descriptions agree. shellcheck and shfmt come from
   # PATH: a clone without one skips it with a line rather than failing every
-  # commit, as identity-guard does. docs-in-step lists its own script in files:,
+  # commit. verbose: true shows that line, since pre-commit hides a passing
+  # hook's output and the skip would read as Passed; it also prints each run's
+  # hook id and duration. docs-in-step lists its own script in files:,
   # since a hook whose script sits outside its pattern skips when only the
   # script changes.
   - repo: local
@@ -68,11 +70,13 @@ repos:
         entry: bash -c 'command -v shellcheck > /dev/null || { echo "shellcheck skipped, not on PATH"; exit 0; }; exec shellcheck "$@"' shellcheck
         language: system
         files: \.sh$
+        verbose: true
       - id: shfmt
         name: Check shell script formatting (shfmt -i 4 -ci)
         entry: bash -c 'command -v shfmt > /dev/null || { echo "shfmt skipped, not on PATH"; exit 0; }; exec shfmt -d -i 4 -ci "$@"' shfmt
         language: system
         files: \.sh$
+        verbose: true
       - id: docs-in-step
         name: Check the script header, README and SKILL.md agree
         entry: bash scripts/dev/check-docs-in-step.sh

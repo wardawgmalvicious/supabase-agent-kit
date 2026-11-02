@@ -42,8 +42,10 @@ scripts/db/supabase-query.sh -h    # prints the header block as help
 ```
 
 Never read, print or echo `.env` or the token. `.claude/settings.json`
-denies `Read(./.env)` and shell commands that print
-`SUPABASE_ACCESS_TOKEN`; neither reaches a `grep -r` or a script.
+denies `Read(./.env)`, `printenv`, `echo` and `printf` commands that name
+`SUPABASE_ACCESS_TOKEN`, and any PowerShell command that names it. It does
+not cover `env`, bare `printenv`, `declare -p`, `Get-ChildItem Env:`,
+`sh -c '…'`, a `grep -r` or a script.
 
 ## How the script works
 
