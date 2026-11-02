@@ -41,7 +41,9 @@ scripts/db/supabase-query.sh -q "select 1 as ok"
 scripts/db/supabase-query.sh -h    # prints the header block as help
 ```
 
-Never read, print or echo `.env` or the token.
+Never read, print or echo `.env` or the token. `.claude/settings.json`
+denies `Read(./.env)` and shell commands that print
+`SUPABASE_ACCESS_TOKEN`; neither reaches a `grep -r` or a script.
 
 ## How the script works
 

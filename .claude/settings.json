@@ -1,5 +1,14 @@
 {
   "worktree": {
     "baseRef": "head"
+  },
+  "permissions": {
+    "deny": [
+      "Read(./.env)",
+      "Bash(printenv *SUPABASE_ACCESS_TOKEN*)",
+      "Bash(echo *SUPABASE_ACCESS_TOKEN*)",
+      "Bash(printf *SUPABASE_ACCESS_TOKEN*)",
+      "PowerShell(*SUPABASE_ACCESS_TOKEN*)"
+    ]
   }
 }
