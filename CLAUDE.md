@@ -8,7 +8,8 @@ A kit that users **copy into their own project's repo**, not an app. It
 has two parts, and the README explains both:
 
 - **Route 1**, `docs/mcp-connector.md`: setup notes for Supabase's hosted
-  MCP server, scoped by URL parameters. There is no code.
+  MCP server, scoped by URL parameters, and the `supabase` entry in
+  `.mcp.json` that it tells installers to copy. There is no code.
 - **Route 2**: `scripts/db/supabase-query.sh`, which posts SQL to the
   Supabase Management API's read-only query endpoint, plus
   `.claude/skills/query-supabase/SKILL.md`, which tells an agent when and
@@ -46,6 +47,21 @@ denies `Read(./.env)`, `printenv`, `echo` and `printf` commands that name
 `SUPABASE_ACCESS_TOKEN`, and any PowerShell command that names it. It does
 not cover `env`, bare `printenv`, `declare -p`, `Get-ChildItem Env:`,
 `sh -c '…'`, a `grep -r` or a script.
+
+## MCP servers
+
+`.mcp.json` is tracked and declares two servers:
+
+- `supabase`, Route 1 in Claude Code. Its URL takes the project ref from
+  `SUPABASE_MCP_PROJECT_REF`, named apart from `SUPABASE_PROJECT_REF`
+  because an environment variable overrides `.env` for the query script.
+  It signs in by OAuth through `/mcp`; no token. `.claude/settings.json`
+  asks before `execute_sql` and `query_logs`, the tools that return row
+  and log content. Changing its URL or its rules means updating
+  `docs/mcp-connector.md`, which tells installers to copy both.
+- `github-mcp`, this repo's own tooling, not part of the kit. It sends
+  `GITHUB_PAT_PERSONAL` as its bearer token, and `.claude/settings.json`
+  allows its three read-only tools unprompted.
 
 ## How the script works
 
