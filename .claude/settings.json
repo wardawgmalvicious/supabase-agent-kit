@@ -3,6 +3,10 @@
     "baseRef": "head"
   },
   "permissions": {
+    "ask": [
+      "mcp__supabase__execute_sql",
+      "mcp__supabase__query_logs"
+    ],
     "deny": [
       "Read(./.env)",
       "Bash(printenv *SUPABASE_ACCESS_TOKEN*)",
