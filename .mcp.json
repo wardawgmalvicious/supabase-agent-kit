@@ -3,6 +3,14 @@
     "supabase": {
       "type": "http",
       "url": "https://mcp.supabase.com/mcp?project_ref=${SUPABASE_MCP_PROJECT_REF}&read_only=true&features=database,debugging,development,docs"
+    },
+    "github-mcp": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": {
+        "Authorization": "Bearer ${GITHUB_PAT_PERSONAL}",
+        "X-MCP-Features": "mcp_apps_disable_form_deferral"
+      }
     }
   }
 }
