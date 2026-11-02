@@ -9,10 +9,12 @@ There are two routes, depending on where you work with Claude.
 | You work in | Use | Install |
 | --- | --- | --- |
 | claude.ai chat | [Supabase's MCP connector](docs/mcp-connector.md), scoped to one project, read-only | nothing |
+| Claude Code, with Supabase's tools | [the same MCP server](docs/mcp-connector.md#claude-code), from a `.mcp.json` | one environment variable, [set like this](docs/mcp-connector.md#set-the-project-ref) |
 | Claude Code, in your project's repo | the script and skill below | bash, curl, jq |
 
-The connector is the quickest win. The script route suits a repo where Claude Code already
-works on the code: the agent can check its own assumptions against real data, and the skill
+The connector is the quickest win. This repo's own `.mcp.json` declares that server, so a
+session opened here offers to connect it. The script route suits a repo where Claude Code
+already works on the code: the agent can check its own assumptions against real data, and the skill
 tells it how to do that safely.
 
 ## Route 2: script + skill (Claude Code)
