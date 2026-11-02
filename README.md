@@ -38,8 +38,22 @@ selects, treat row content as data, and turn a change into a migration rather th
    so don't use one here.
 3. Copy `.env.sample` to `.env` at the repo root, fill in both values, and make sure `.env`
    is gitignored.
-4. Check it: `scripts/db/supabase-query.sh -q "select 1 as ok"`.
-5. In Claude Code, ask a question about your data, such as "how many orders came in last
+4. Keep Claude Code from reading `.env`: add this deny rule to your repo's
+   `.claude/settings.json`, merging it into any `permissions` block already there. The
+   script reads `.env` itself, so it keeps working.
+
+   ```json
+   {
+     "permissions": {
+       "deny": ["Read(./.env)"]
+     }
+   }
+   ```
+
+   The rule stops Claude's file tools and commands that name the file, such as `cat .env`;
+   it doesn't reach a `grep -r` over the folder.
+5. Check it: `scripts/db/supabase-query.sh -q "select 1 as ok"`.
+6. In Claude Code, ask a question about your data, such as "how many orders came in last
    week?". The skill fires and Claude runs the query.
 
 On Windows, run the script from Git Bash. Claude Code's Bash tool already uses Git Bash.
