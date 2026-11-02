@@ -54,3 +54,22 @@ repos:
         pass_filenames: false
         always_run: true
         stages: [pre-push]
+
+# The handoff queue's check, appended under `repos:` in the repo's
+# .pre-commit-config.yaml once a docs/handoffs/ exists. It runs the
+# triage-inbox skill's handoff-status.py, so no repo names the repo the
+# skill comes from. always_run, since pre-commit passes no deleted file,
+# and a landing whose only brief change is the deletion is the commit that
+# strands a blocked-by. --no-inbox, or every other repo's inbox directory
+# reads as an orphan. A clone without the skill or uv, a co-developer's,
+# skips it with a line rather than failing every commit. The entry holds no
+# colon followed by a space, which YAML reads as a key in a plain scalar
+# and pre-commit then refuses the whole file.
+  - repo: local
+    hooks:
+      - id: lint-briefs
+        name: Check each handoff brief's frontmatter and blockers
+        entry: bash -c 'f="$HOME/.claude/skills/triage-inbox/scripts/handoff-status.py"; if [ ! -f "$f" ] || ! command -v uv > /dev/null; then echo "lint-briefs skipped, no uv or no triage-inbox skill at $f"; exit 0; fi; exec uv run --no-project --quiet "$f" . --check --no-inbox' lint-briefs
+        language: system
+        pass_filenames: false
+        always_run: true

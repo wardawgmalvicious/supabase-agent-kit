@@ -75,3 +75,10 @@ convention, and re-date a claim when you re-test it. The endpoint is
 marked beta by Supabase.
 
 `*.sh` is pinned to LF in `.gitattributes`.
+
+## Handoff briefs
+
+Handoff briefs wait in `docs/handoffs/execute/`, and
+`.claude/rules/handoff-briefs.md` has their keys; print the queue with `uv run --no-project ~/.claude/skills/triage-inbox/scripts/handoff-status.py . --no-inbox`.
+
+Without that script: `grep -H -E '^(status|priority|needs|blocked-by|reopen-when):' docs/handoffs/execute/*.md`
