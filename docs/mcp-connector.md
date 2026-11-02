@@ -82,10 +82,10 @@ The name isn't `SUPABASE_PROJECT_REF` on purpose. Route 2's script lets an envir
 variable override `.env`, so a machine-wide `SUPABASE_PROJECT_REF` would point the script at
 this one project in every repo.
 
-If the variable is missing, `/mcp` warns that `SUPABASE_MCP_PROJECT_REF` isn't set, and the
-connection fails, since the URL goes out holding the literal `${SUPABASE_MCP_PROJECT_REF}`.
-Don't set it to an empty string: whether Supabase then drops the project scoping is
-untested.
+If the variable is missing, `/mcp` warns that `SUPABASE_MCP_PROJECT_REF` isn't set, and
+Claude Code still sends the URL holding the literal `${SUPABASE_MCP_PROJECT_REF}`. What
+Supabase does with that ref, or with an empty one, is untested, so fix the variable before
+you connect rather than relying on a failure.
 
 ## Before you connect it
 

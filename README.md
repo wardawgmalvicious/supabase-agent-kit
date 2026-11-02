@@ -9,7 +9,7 @@ There are two routes, depending on where you work with Claude.
 | You work in | Use | Install |
 | --- | --- | --- |
 | claude.ai chat | [Supabase's MCP connector](docs/mcp-connector.md), scoped to one project, read-only | nothing |
-| Claude Code, with Supabase's tools | [the same MCP server](docs/mcp-connector.md#claude-code), from a `.mcp.json` | one environment variable, [set like this](docs/mcp-connector.md#set-the-project-ref) |
+| Claude Code, with Supabase's tools | [the same MCP server](docs/mcp-connector.md#claude-code), from a `.mcp.json` | a `.mcp.json` entry, two `ask` rules and one environment variable, [steps here](docs/mcp-connector.md#claude-code) |
 | Claude Code, in your project's repo | the script and skill below | bash, curl, jq |
 
 The connector is the quickest win. This repo's own `.mcp.json` declares that server, so a
