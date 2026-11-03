@@ -107,14 +107,15 @@ its behavior may change.
 out and the kit stays read-only: `-w` then exits `2`.
 
 - **The token must be Full access** for this one project, since Read-only is the only other
-  choice. A Full token is Read-write on everything the dashboard lists: the organization,
-  its members and settings, and the project's settings, API keys, backups and more (the
-  dashboard's token summary, 2026-11-02). Give it a short expiry, keep it off production
+  choice. A Full token is Read-write on everything the dashboard lists: the organization
+  and its members, the project's settings, API keys, backups and more (the dashboard's
+  token summary, 2026-11-02). Give it a short expiry, keep it off production
   projects, and revoke it when the writes are done.
 - **A write runs as `postgres`**, outside a read-only transaction, so it can change any
   table. A call whose statement fails rolls back its earlier statements. A write ending in
   `returning ...` prints those rows; without one it prints `(0 rows)`, which is no count.
-  Observed 2026-11-02, not documented.
+  Observed 2026-11-02, not documented. After an HTTP 5xx or a request that didn't finish,
+  exit `1` leaves the write's outcome unknown, and the script says so.
 - **The skill writes data only**: an insert, update or delete you asked for, after you
   approve the exact SQL. A schema change still goes in a migration, since DDL run here skips
   Supabase's migration history.

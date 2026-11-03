@@ -53,6 +53,6 @@ scripts/db/supabase-query.sh -w -q "update ..."    # write mode: only as Limits 
 - Exit 1 prints the HTTP status. On 401 or 403, the token is wrong or lacks
   Database access. With `-w`, a refusal naming a read-only transaction means
   `SUPABASE_ACCESS_TOKEN_RW` holds a Read-only token, which the user must
-  replace with a Full one. If the request did not complete, never retry a
-  write: check with a select. On a Postgres error, fix the SQL and retry once.
+  replace with a Full one. If the request did not complete, or came back
+  HTTP 5xx, never retry a write: check with a select. On a Postgres error, fix the SQL and retry once.
   If it fails again, show the error.

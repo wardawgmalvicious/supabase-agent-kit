@@ -73,6 +73,8 @@
 # Exit status: 0 for a result, 1 when the API or Postgres refused the request
 # (the HTTP status and message go to stderr), 2 for a usage error, a missing
 # tool, or a missing setting, such as -w with no SUPABASE_ACCESS_TOKEN_RW.
+# Under -w, exit 1 after an HTTP 5xx or an unfinished request leaves the write's
+# outcome unknown, and a hint says so.
 #
 # Deployment assumption: this script lives at <repo>/scripts/db/supabase-query.sh
 # so SCRIPT_DIR/../.. resolves to the repo root holding .env.
@@ -264,6 +266,10 @@ if [[ ! "$HTTP_STATUS" =~ ^2 ]]; then
     if [[ "$WRITE" -eq 1 && "$MESSAGE" == *"read-only transaction"* ]]; then
         echo "hint: $TOKEN_KEY looks like a Read-only token; write mode needs a Full one" >&2
     fi
+    # A 5xx says the API failed, not that Postgres refused: the write may have run.
+    if [[ "$WRITE" -eq 1 && "$HTTP_STATUS" =~ ^5 ]]; then
+        echo "hint: the write may have been applied; check with a select before retrying" >&2
+    fi
     case "$HTTP_STATUS" in
         401) echo "hint: $TOKEN_KEY is wrong, expired or revoked" >&2 ;;
         403) echo "hint: $TOKEN_KEY lacks Database access on project $PROJECT_REF" >&2 ;;
@@ -290,7 +296,7 @@ ROW_COUNT="$("${JQ[@]}" 'length' "$RESPONSE_FILE")"
 if [[ "$ROW_COUNT" -eq 0 ]]; then
     echo "(0 rows)"
     if [[ "$WRITE" -eq 1 ]]; then
-        echo "hint: a write reports no row count; end it with returning ..., or select afterwards, to see what changed" >&2
+        echo "hint: (0 rows) counts rows changed only when the SQL ended in returning ...; otherwise select afterwards" >&2
     fi
     if [[ "$MODE" == describe ]]; then
         echo "hint: no such table, a materialized view (not in information_schema), or no privilege on it" >&2
