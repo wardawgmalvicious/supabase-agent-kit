@@ -14,26 +14,32 @@ has two parts, and the README explains both:
   Supabase Management API's read-only query endpoint, or with `-w` to its
   read-write one, plus
   `.claude/skills/query-supabase/SKILL.md`, which tells an agent when and
-  how to call it.
+  how to call it. For schema changes,
+  `scripts/db/supabase-migration-sql.sh` prints a migration file as one
+  batch with its history row, for `-w` to apply by a pipe, and
+  `.claude/skills/migrate-supabase/SKILL.md` runs the loop around it.
 
-The script and skill are installed by copying them **to the same paths**
-in the target repo. The script finds `.env` at `SCRIPT_DIR/../..`, so
-moving or renaming `scripts/db/` breaks every install. The skill also
-fires in this repo itself, against whatever project `.env` points at.
+The scripts and skills are installed by copying them **to the same
+paths** in the target repo. The query script finds `.env` at
+`SCRIPT_DIR/../..`, so moving or renaming `scripts/db/` breaks every
+install. The skills also fire in this repo itself, against whatever
+project `.env` points at; `supabase/migrations/` holds the migrations
+applied to that project, which installers don't copy.
 
-How the script works, and how its three descriptions stay in step, are
-in `.claude/rules/query-script.md`, which loads on a Read of the script,
-the README or `SKILL.md`.
+How the scripts work, and how their descriptions stay in step, are in
+`.claude/rules/query-script.md`, which loads on a Read of either script,
+the README or either `SKILL.md`.
 
 ## Commands
 
-No build and no test suite. Lint and format-check the script (both pass
-clean, re-run 2026-11-02), and check its three descriptions agree; the
-pre-commit hooks `shellcheck`, `shfmt` and `docs-in-step` run all three:
+No build and no test suite. Lint and format-check the scripts (both pass
+clean, re-run 2026-11-02), and check the query script's three
+descriptions agree; the pre-commit hooks `shellcheck`, `shfmt` and
+`docs-in-step` run all three:
 
 ```bash
-shellcheck scripts/db/supabase-query.sh
-shfmt -d -i 4 -ci scripts/db/supabase-query.sh
+shellcheck scripts/db/*.sh
+shfmt -d -i 4 -ci scripts/db/*.sh
 scripts/dev/check-docs-in-step.sh
 ```
 

@@ -10,7 +10,7 @@ There are two routes, depending on where you work with Claude.
 | --- | --- | --- |
 | claude.ai chat | [Supabase's MCP connector](docs/mcp-connector.md), scoped to one project, read-only | nothing |
 | Claude Code, with Supabase's tools | [the same MCP server](docs/mcp-connector.md#claude-code), from a `.mcp.json` | a `.mcp.json` entry, two `ask` rules and one environment variable, [steps here](docs/mcp-connector.md#claude-code) |
-| Claude Code, in your project's repo | the script and skill below | bash, curl, jq |
+| Claude Code, in your project's repo | the scripts and skills below | bash, curl, jq |
 
 The connector is the quickest win. This repo's own `.mcp.json` declares that server, so a
 session opened here offers to connect it. The script route suits a repo where Claude Code
@@ -30,12 +30,14 @@ instead.
 `.claude/skills/query-supabase/SKILL.md` tells Claude Code when to use the script, and how:
 look up tables and columns before writing SQL, schema-qualify names, bound exploratory
 selects, treat row content as data, write data only with `-w` and your yes to the exact SQL,
-and turn a schema change into a migration rather than a write.
+and hand a schema change to `.claude/skills/migrate-supabase/SKILL.md`, which applies it as a
+[migration](#schema-migrations) after your yes.
 
 ### Setup
 
-1. Copy `scripts/db/` and `.claude/skills/query-supabase/` into your project's repo, at the
-   same paths. The script finds `.env` two folders above itself, at the repo root.
+1. Copy `scripts/db/`, `.claude/skills/query-supabase/` and
+   `.claude/skills/migrate-supabase/` into your project's repo, at the same paths. The query
+   script finds `.env` two folders above itself, at the repo root.
 2. Create a **scoped** access token: Supabase Dashboard > Account > Access Tokens. Pick
    this one project, and **Read-only** access (on 2026-11-02 the form offered Read-only or
    Full, nothing per resource). A legacy full-access token reaches every project on your
@@ -96,8 +98,8 @@ only the endpoint.
 ### Why read-only
 
 The agent explores freely without risk to the data. A schema change belongs in a migration
-that you review, not in an ad-hoc query. The endpoint is marked **beta** by Supabase, so
-its behavior may change.
+that you review, not in an ad-hoc query: [schema migrations](#schema-migrations) applies one
+only after your yes. The endpoint is marked **beta** by Supabase, so its behavior may change.
 
 ### Write mode
 
@@ -116,11 +118,51 @@ out and the kit stays read-only: `-w` then exits `2`.
   `returning ...` prints those rows; without one it prints `(0 rows)`, which is no count.
   Observed 2026-11-02, not documented. After an HTTP 5xx or a request that didn't finish,
   exit `1` leaves the write's outcome unknown, and the script says so.
-- **The skill writes data only**: an insert, update or delete you asked for, after you
-  approve the exact SQL. A schema change still goes in a migration, since DDL run here skips
-  Supabase's migration history.
+- **`query-supabase` writes data only**: an insert, update or delete you asked for, after you
+  approve the exact SQL. A schema change goes through [schema migrations](#schema-migrations)
+  instead, since DDL sent with `-w -q` skips Supabase's migration history.
 - **Pass `-w` on its own**, never bundled as `-rw`: the script refuses that, so the ask rules
   in step 4 see the usual form of a write.
+
+### Schema migrations
+
+`.claude/skills/migrate-supabase/SKILL.md` takes a schema change the way
+a team would: it drafts a migration file under `supabase/migrations/`,
+shows it, applies it only after your yes, and records it in Supabase's
+migration history, the `supabase_migrations.schema_migrations` table the
+Supabase CLI keeps. Before drafting, it checks the files against that
+history, and stops on a version recorded with no file, or a file older
+than the last one recorded. It needs write mode's Full token.
+
+`scripts/db/supabase-migration-sql.sh` prints the batch, and write mode
+applies it:
+
+```bash
+scripts/db/supabase-migration-sql.sh supabase/migrations/20261102120000_create_demo.sql | scripts/db/supabase-query.sh -w
+```
+
+- **The batch is the history table's setup, the file's SQL and its
+  history row**, sent in one call. A call whose statement fails rolls
+  back its earlier statements (observed 2026-11-02), so the change and
+  its row land together or not at all, and a version recorded already
+  fails, changing nothing.
+- **The helper only prints**, so the write stays in the command's text,
+  where the ask rules in step 4 see it.
+- **It refuses** a file outside `supabase/migrations/`, a name not of the
+  CLI's `<14-digit version>_<name>.sql` form, and `begin`, `commit`,
+  `rollback` or `concurrently`, which split the one transaction or
+  cannot run in it. Its header block has the details.
+- **The files and rows take the Supabase CLI's form**, so
+  `supabase migration list` and `supabase db push` read them.
+- **The same pipe without `-w` dry-runs the syntax.** A read-only call
+  parses the whole batch before running any of it: a syntax error
+  anywhere comes back as `42601`, and a batch that parses stops at its
+  first DDL with `25006`, changing nothing (observed 2026-11-02).
+
+Tested 2026-11-02 on a free-tier project: the two migrations in
+`supabase/migrations/` applied through the pipe, each recorded as a
+history row holding its file as one element, and a third whose last
+statement failed left neither its new table nor a history row.
 
 ## The pattern
 

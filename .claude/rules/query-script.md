@@ -4,6 +4,7 @@ paths:
   - "scripts/dev/check-docs-in-step.sh"
   - "README.md"
   - ".claude/skills/query-supabase/**"
+  - ".claude/skills/migrate-supabase/**"
 ---
 
 # The query script and its three descriptions
@@ -38,6 +39,31 @@ paths:
 - `-d` validates `schema.table` as plain identifiers and does not quote
   them, because it interpolates them into SQL.
 
+## The migration helper
+
+- **`supabase-migration-sql.sh` only prints.** It reads no `.env` and
+  never calls the query script: a helper that ran `-w` itself would hide
+  the write from the ask rules, which match the command's text. Keep it
+  a printer, applied by a pipe into `supabase-query.sh -w`.
+- **Its batch is one call, so it is one transaction**: the CLI's
+  history-table setup, the file, then the history insert ending in
+  `returning version, name`. A failing statement rolls back the rest
+  (observed 2026-11-02), so a change never lands without its row.
+- **`statements` holds the whole file as one element**, since splitting
+  on `;` breaks dollar-quoted bodies. The CLI's `migration list` and
+  `db push` read only `version`, and `migration fetch` rebuilds a file
+  from the elements (supabase/cli `develop`, read 2026-11-02); the
+  header has the detail.
+- **The refusals scan the SQL in jq**, already a requirement, with
+  comments, quoted text and dollar-quoted bodies blanked, so PL/pgSQL's
+  `begin ... end` passes. It is a light scan, not a lexer: the header
+  says what it misses. jq prints nothing until the checks pass and
+  leaves by `halt_error` with exit 2.
+- **Names and versions are validated, not quoted**: the filename's
+  `<version>` and `<name>` reach the SQL as literals, so `<name>` is
+  limited to letters, digits, `_` and `-`. The file's SQL sits in a
+  dollar quote whose tag the file does not hold.
+
 ## Keeping the docs in step
 
 The script's header block doubles as `-h` output (the `usage()` function
@@ -53,3 +79,10 @@ in the script; observed behavior and its dates it does not check.
 Observed, undocumented behavior is dated (for example "observed
 2026-11-02"); keep that convention, and re-date a claim when you re-test
 it. The endpoint is marked beta by Supabase.
+
+The migration helper's header block is its `-h` output too, printed from
+`# Print a Supabase migration` to the first blank line, and its only
+full description. The README's "Schema migrations" section and
+`migrate-supabase`'s `SKILL.md` restate its pipe and its refusals: change
+those with it. `check-docs-in-step.sh` does not read the helper, which
+has no flag but `-h`.
