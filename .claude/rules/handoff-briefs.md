@@ -45,7 +45,7 @@ so an issue is `62`, never `#62`.
   rebase its branch on `main`, run `pre-commit run --all-files` in the
   worktree, `git merge --ff-only` the branch from the main checkout,
   then remove the worktree and delete its branch. The user pushes.
-  `/lead-issues` lands by this line, and stops in a repo that has none.
+  `/lead-sessions` lands by this line, and stops in a repo that has none.
 - **Landing deletes a file's brief** in the commit that finishes its
   work: drop its name from every `blocked-by`, and re-point what linked
   to it. An issue closes when a commit saying `Closes #<n>` reaches the
