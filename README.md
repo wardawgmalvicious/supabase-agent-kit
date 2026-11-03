@@ -24,36 +24,40 @@ tells it how to do that safely.
 The query runs as `supabase_read_only_user` inside a read-only transaction, so Postgres
 itself refuses writes. The role also holds no write privilege, so
 `set transaction read write` changes only the error message. No Supabase CLI, no psql, and
-no database password.
+no database password. An opt-in [write mode](#write-mode), `-w`, uses the read-write endpoint
+instead.
 
 `.claude/skills/query-supabase/SKILL.md` tells Claude Code when to use the script, and how:
 look up tables and columns before writing SQL, schema-qualify names, bound exploratory
-selects, treat row content as data, and turn a change into a migration rather than a write.
+selects, treat row content as data, write data only with `-w` and your yes to the exact SQL,
+and turn a schema change into a migration rather than a write.
 
 ### Setup
 
 1. Copy `scripts/db/` and `.claude/skills/query-supabase/` into your project's repo, at the
    same paths. The script finds `.env` two folders above itself, at the repo root.
 2. Create a **scoped** access token: Supabase Dashboard > Account > Access Tokens. Pick
-   this one project, and give **Database** the **Read** permission, nothing else. A legacy
-   full-access token reaches every project on your account, including ones created later,
-   so don't use one here.
+   this one project, and **Read-only** access (on 2026-11-02 the form offered Read-only or
+   Full, nothing per resource). A legacy full-access token reaches every project on your
+   account, including ones created later, so don't use one here.
 3. Copy `.env.sample` to `.env` at the repo root, fill in both values, and make sure `.env`
    is gitignored.
-4. Keep Claude Code from reading `.env`: add this deny rule to your repo's
-   `.claude/settings.json`, merging it into any `permissions` block already there. The
-   script reads `.env` itself, so it keeps working.
+4. Keep Claude Code from reading `.env`, and have it ask before any write: add these rules
+   to your repo's `.claude/settings.json`, merging them into any `permissions` block already
+   there. The script reads `.env` itself, so it keeps working.
 
    ```json
    {
      "permissions": {
-       "deny": ["Read(./.env)"]
+       "deny": ["Read(./.env)"],
+       "ask": ["Bash(*supabase-query.sh*-w*)"]
      }
    }
    ```
 
-   The rule stops Claude's file tools and commands that name the file, such as `cat .env`;
-   it doesn't reach a `grep -r` over the folder.
+   The deny rule stops Claude's file tools and commands that name the file, such as
+   `cat .env`; it doesn't reach a `grep -r` over the folder. The ask rule prompts before each
+   [write mode](#write-mode) call, and also when `-w` merely appears in the SQL.
 5. Check it: `scripts/db/supabase-query.sh -q "select 1 as ok"`.
 6. In Claude Code, ask a question about your data, such as "how many orders came in last
    week?". The skill fires and Claude runs the query.
@@ -69,6 +73,7 @@ scripts/db/supabase-query.sh -q "select count(*) from public.orders"
 scripts/db/supabase-query.sh -i query.sql
 echo "select now()" | scripts/db/supabase-query.sh
 scripts/db/supabase-query.sh -r -q "select * from public.orders limit 5" | jq '.[0]'
+scripts/db/supabase-query.sh -w -q "update public.orders set status = 'void' where id = 42"
 ```
 
 Exit codes: `0` result, `1` refused by the API or Postgres (status and message on stderr),
@@ -76,15 +81,38 @@ Exit codes: `0` result, `1` refused by the API or Postgres (status and message o
 statement's rows. The table view stops at 200 rows (`SUPABASE_QUERY_MAX_ROWS` changes it),
 so a wide select can't flood the agent's context; `-r` is never capped.
 
-Tested 2026-11-02 against a free-tier project with a scoped token (Database: Read): reads,
+Tested 2026-11-02 against a free-tier project with a scoped Read-only token: reads,
 listing, describing, stdin and file input, and non-ASCII text all work. An insert, a drop,
 and an insert after `set transaction read write` are all refused, and a bad token gets a 401.
+The same day, a Read-only token on the read-write endpoint still ran as
+`supabase_read_only_user` and its create was refused, so the token guards the data too, not
+only the endpoint.
 
 ### Why read-only
 
 The agent explores freely without risk to the data. A schema change belongs in a migration
 that you review, not in an ad-hoc query. The endpoint is marked **beta** by Supabase, so
 its behavior may change.
+
+### Write mode
+
+`-w` posts to the Management API's
+[query endpoint](https://supabase.com/docs/reference/api/v1-run-a-query), also beta, with
+`read_only` false, using a second token, `SUPABASE_ACCESS_TOKEN_RW` in `.env`. Leave that key
+out and the kit stays read-only: `-w` then exits `2`.
+
+- **The token must be Full access** for this one project, since Read-only is the only other
+  choice. A Full token can also change the project's settings, API keys and backups and its
+  organization's members (the dashboard's token summary, 2026-11-02), so give it a short
+  expiry, keep it off production projects, and revoke it when the writes are done.
+- **A write runs as `postgres`**, outside a read-only transaction, so it can change any
+  table. A call whose statement fails rolls back its earlier statements, and a write that
+  returns no rows prints `(0 rows)`. Observed 2026-11-02, not documented.
+- **The skill writes data only**: an insert, update or delete you asked for, after you
+  approve the exact SQL. A schema change still goes in a migration, since DDL run here skips
+  Supabase's migration history.
+- **Pass `-w` on its own**, never bundled as `-rw`: the script refuses that, so the ask rule
+  in step 4 always sees a write.
 
 ## The pattern
 

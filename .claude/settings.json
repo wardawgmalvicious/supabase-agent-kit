@@ -10,7 +10,8 @@
     ],
     "ask": [
       "mcp__supabase__execute_sql",
-      "mcp__supabase__query_logs"
+      "mcp__supabase__query_logs",
+      "Bash(*supabase-query.sh*-w*)"
     ],
     "deny": [
       "Read(./.env)",

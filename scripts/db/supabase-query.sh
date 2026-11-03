@@ -3,6 +3,7 @@
 # shellcheck disable=SC2016
 # Run read-only SQL against a Supabase project's Postgres database, from a shell
 # or from a coding agent such as Claude Code, without the Supabase CLI or psql.
+# With -w it runs read-write SQL instead (write mode, below).
 #
 # It posts the query to the Supabase Management API's read-only query endpoint,
 #   POST https://api.supabase.com/v1/projects/<ref>/database/query/read-only
@@ -10,21 +11,39 @@
 # endpoint is marked beta in Supabase's API reference. Observed on a free-tier
 # project on 2026-11-02, not documented: the query runs in a read-only
 # transaction AND the role holds no write privilege, so an insert or drop is
-# refused, and `set transaction read write` only changes the error. Nothing in
-# this script enforces read-only; Postgres does.
+# refused, and `set transaction read write` only changes the error. A Full
+# token is refused the same way, so the refusal is the endpoint's, not the
+# token's. Nothing in this script enforces read-only; Postgres does.
 # Requires bash, curl and jq; column is used for the table view.
 #
+# Write mode, -w, posts to the read-write query endpoint instead, also beta,
+#   POST https://api.supabase.com/v1/projects/<ref>/database/query
+# with read_only false and the second token, SUPABASE_ACCESS_TOKEN_RW. Observed
+# 2026-11-02, not documented: with a Full token the query runs as postgres,
+# outside a read-only transaction, so it can change anything; with a Read-only
+# token it still runs as supabase_read_only_user, and a write is refused. A
+# call whose statement fails rolls back its earlier statements. Pass -w as an
+# argument of its own, never bundled as -rw, so that a permission rule matching
+# the command's text sees every write; the script refuses it bundled.
+#
 # Credentials. Use a SCOPED personal access token: in the Supabase Dashboard,
-# Account > Access Tokens, pick this one project and give Database the Read
-# permission, nothing else. Never use a legacy full-access token here: it can
-# reach every organization and project on the account, including ones created
-# after the token. The token is read from the environment first, then from the
-# repo root's .env, and is passed to curl on stdin, never on its command line.
+# Account > Access Tokens, pick this one project and Read-only access (the
+# form offered Read-only or Full, nothing per resource, on 2026-11-02). Never
+# use a legacy full-access token here: it can reach every organization and
+# project on the account, including ones created after the token. Write mode
+# needs a second scoped token with Full access, which can also change the
+# project's settings, API keys and backups and its organization's members
+# (the dashboard's token summary, 2026-11-02): give it a short expiry, and
+# revoke it when the writes are done. Each token is read from the environment
+# first, then from the repo root's .env, and is passed to curl on stdin, never
+# on its command line.
 #
 # .env keys (repo root, two levels above this script, gitignored):
 #   SUPABASE_PROJECT_REF    the project ref: Project Settings > General, or the
 #                           <ref> in https://<ref>.supabase.co
-#   SUPABASE_ACCESS_TOKEN   the scoped token, sbp_...
+#   SUPABASE_ACCESS_TOKEN   the Read-only scoped token, sbp_...
+#   SUPABASE_ACCESS_TOKEN_RW
+#                           optional, -w only: the Full scoped token, sbp_...
 # One KEY=value per line: no `export`, and no comment after a value.
 #
 # SUPABASE_QUERY_MAX_ROWS (environment, default 200) caps the table view, so a
@@ -37,19 +56,21 @@
 #   scripts/db/supabase-query.sh -l                 # list tables and views
 #   scripts/db/supabase-query.sh -d public.orders   # describe one table's columns
 #   scripts/db/supabase-query.sh -r -q "select ..." | jq '.[0]'   # raw JSON rows
+#   scripts/db/supabase-query.sh -w -q "update public.orders set ... where ..."
 #
 # Name every table with its schema (public.orders, not orders). The endpoint's
 # reference says all entity references must be schema qualified; an unqualified
 # public table did resolve on 2026-11-02, but don't rely on it.
 #
 # Several statements in one call return only the last statement's rows
-# (observed 2026-11-02).
+# (observed 2026-11-02, on both endpoints). A write that returns no rows prints
+# (0 rows).
 #
 # -l and -d read information_schema, which leaves out materialized views.
 #
 # Exit status: 0 for a result, 1 when the API or Postgres refused the request
 # (the HTTP status and message go to stderr), 2 for a usage error, a missing
-# tool, or a missing setting.
+# tool, or a missing setting, such as -w with no SUPABASE_ACCESS_TOKEN_RW.
 #
 # Deployment assumption: this script lives at <repo>/scripts/db/supabase-query.sh
 # so SCRIPT_DIR/../.. resolves to the repo root holding .env.
@@ -85,11 +106,14 @@ case "${OSTYPE:-}" in msys* | cygwin*) JQ=(jq -b) ;; esac
 # --- arguments -----------------------------------------------------------------
 QUERY=""
 RAW=0
+WRITE=0
 MODE="query"
 TARGET=""
 SOURCES=0 # how many of -q, -i, -d, -l were given; more than one is refused
+# The arguments as given, to check below that -w stands alone.
+ARGS=("$@")
 
-while getopts ":q:i:d:lrh" opt; do
+while getopts ":q:i:d:lrwh" opt; do
     case "$opt" in
         q)
             QUERY="$OPTARG"
@@ -110,6 +134,7 @@ while getopts ":q:i:d:lrh" opt; do
             SOURCES=$((SOURCES + 1))
             ;;
         r) RAW=1 ;;
+        w) WRITE=1 ;;
         h)
             usage
             exit 0
@@ -122,6 +147,17 @@ shift $((OPTIND - 1))
 [[ $# -eq 0 ]] || die "unexpected argument: $1 (quote the SQL and pass it with -q)"
 [[ $SOURCES -le 1 ]] || die "use only one of -q, -i, -d, -l"
 [[ "$MAX_ROWS" =~ ^[1-9][0-9]*$ ]] || die "SUPABASE_QUERY_MAX_ROWS must be a positive whole number"
+
+if [[ "$WRITE" -eq 1 ]]; then
+    [[ "$MODE" == query ]] || die "-w takes SQL (-q, -i or stdin), not -l or -d"
+    # A permission rule matches the command's text, so -w must be a word of its
+    # own there: bundled, as in -rw, a rule written for -w would miss it.
+    W_ALONE=0
+    for arg in "${ARGS[@]}"; do
+        if [[ "$arg" == "-w" ]]; then W_ALONE=1; fi
+    done
+    [[ "$W_ALONE" -eq 1 ]] || die "pass -w on its own, not bundled with another flag (as in -rw)"
+fi
 
 # Schemas Supabase manages. -l hides them so the list shows the project's own
 # tables; query them directly when they are what you want.
@@ -167,10 +203,18 @@ env_value() {
 }
 
 PROJECT_REF="${SUPABASE_PROJECT_REF:-$(env_value SUPABASE_PROJECT_REF)}"
-ACCESS_TOKEN="${SUPABASE_ACCESS_TOKEN:-$(env_value SUPABASE_ACCESS_TOKEN)}"
+if [[ "$WRITE" -eq 1 ]]; then
+    TOKEN_KEY="SUPABASE_ACCESS_TOKEN_RW"
+    ACCESS_TOKEN="${SUPABASE_ACCESS_TOKEN_RW:-$(env_value SUPABASE_ACCESS_TOKEN_RW)}"
+    ENDPOINT="database/query"
+else
+    TOKEN_KEY="SUPABASE_ACCESS_TOKEN"
+    ACCESS_TOKEN="${SUPABASE_ACCESS_TOKEN:-$(env_value SUPABASE_ACCESS_TOKEN)}"
+    ENDPOINT="database/query/read-only"
+fi
 
 [[ -n "$PROJECT_REF" ]] || die "SUPABASE_PROJECT_REF is not set in the environment or $ENV_FILE"
-[[ -n "$ACCESS_TOKEN" ]] || die "SUPABASE_ACCESS_TOKEN is not set in the environment or $ENV_FILE"
+[[ -n "$ACCESS_TOKEN" ]] || die "$TOKEN_KEY is not set in the environment or $ENV_FILE"
 [[ "$PROJECT_REF" =~ ^[a-z0-9]+$ ]] || die "SUPABASE_PROJECT_REF should be the bare ref, such as abcdefghijklmnopqrst"
 
 # --- request -------------------------------------------------------------------
@@ -181,15 +225,20 @@ RESPONSE_FILE="$TMP_DIR/response.json"
 
 # The SQL reaches jq on stdin and curl through a file: as an argument it would
 # share Windows' 32,767-character command line, so a long query would fail.
-# jq does the JSON quoting.
-printf '%s' "$QUERY" | "${JQ[@]}" -Rs '{query: .}' >"$BODY_FILE"
+# jq does the JSON quoting. Write mode says read_only false outright, though
+# leaving it out behaved the same (observed 2026-11-02).
+if [[ "$WRITE" -eq 1 ]]; then
+    printf '%s' "$QUERY" | "${JQ[@]}" -Rs '{query: ., read_only: false}' >"$BODY_FILE"
+else
+    printf '%s' "$QUERY" | "${JQ[@]}" -Rs '{query: .}' >"$BODY_FILE"
+fi
 
 # The Authorization header arrives on stdin (-H @-), so the token never appears
 # in the process list.
 HTTP_STATUS="$(
     printf 'Authorization: Bearer %s\n' "$ACCESS_TOKEN" | curl -sS \
         --connect-timeout "$CONNECT_TIMEOUT" --max-time "$MAX_TIME" \
-        -X POST "$API_BASE/projects/$PROJECT_REF/database/query/read-only" \
+        -X POST "$API_BASE/projects/$PROJECT_REF/$ENDPOINT" \
         -H @- \
         -H 'Content-Type: application/json' \
         --data-binary "@$BODY_FILE" \
@@ -202,9 +251,14 @@ if [[ ! "$HTTP_STATUS" =~ ^2 ]]; then
         cat "$RESPONSE_FILE")"
     echo "error: HTTP $HTTP_STATUS: $MESSAGE" >&2
     case "$HTTP_STATUS" in
-        401) echo "hint: the token is wrong, expired or revoked" >&2 ;;
-        403) echo "hint: the token lacks Database read on project $PROJECT_REF" >&2 ;;
-        404) echo "hint: check SUPABASE_PROJECT_REF; the read-only endpoint is beta" >&2 ;;
+        400)
+            if [[ "$WRITE" -eq 1 && "$MESSAGE" == *"read-only transaction"* ]]; then
+                echo "hint: $TOKEN_KEY looks like a Read-only token; write mode needs a Full one" >&2
+            fi
+            ;;
+        401) echo "hint: $TOKEN_KEY is wrong, expired or revoked" >&2 ;;
+        403) echo "hint: $TOKEN_KEY lacks Database access on project $PROJECT_REF" >&2 ;;
+        404) echo "hint: check SUPABASE_PROJECT_REF; the query endpoints are beta" >&2 ;;
         429) echo "hint: rate limited; wait and retry" >&2 ;;
     esac
     exit 1

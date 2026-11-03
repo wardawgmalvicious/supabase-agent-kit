@@ -11,7 +11,8 @@ has two parts, and the README explains both:
   MCP server, scoped by URL parameters, and the `supabase` entry in
   `.mcp.json` that it tells installers to copy. There is no code.
 - **Route 2**: `scripts/db/supabase-query.sh`, which posts SQL to the
-  Supabase Management API's read-only query endpoint, plus
+  Supabase Management API's read-only query endpoint, or with `-w` to its
+  read-write one, plus
   `.claude/skills/query-supabase/SKILL.md`, which tells an agent when and
   how to call it.
 
@@ -69,6 +70,13 @@ not cover `env`, bare `printenv`, `declare -p`, `Get-ChildItem Env:`,
   runs queries as `supabase_read_only_user` in a read-only transaction.
   Don't add SQL filtering as a "safety" layer; it would imply a guarantee
   the script doesn't make.
+- **`-w` is the one way to write**: it posts to `/database/query` with a
+  second, Full token, `SUPABASE_ACCESS_TOKEN_RW`, and runs as `postgres`
+  (observed 2026-11-02). Its gates are that key's absence by default, the
+  skill's yes to the exact SQL, and the `Bash(*supabase-query.sh*-w*)`
+  ask rule in `.claude/settings.json`, which the README tells installers
+  to copy. The script refuses `-w` bundled with another flag so the rule
+  always sees it; keep that check in any change to the arguments.
 - **Secrets and payloads stay off argv.** The token reaches curl as a
   header on stdin (`-H @-`); the SQL reaches jq on stdin and curl through
   a temp file. This avoids the process list and Windows' 32,767-character
