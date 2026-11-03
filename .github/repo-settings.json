@@ -2,7 +2,7 @@
   "_comment": "Managed by repo-settings.ps1, from the audit-repo skill (-Export / -Check / -Apply). Visibility and the social preview image are deliberately not here; see the script header.",
   "_repo": "wardawgmalvicious/supabase-agent-kit",
   "repository": {
-    "description": "Let Claude Code run read-only SQL against your Supabase database: a Management API query script and skill, plus setup notes for Supabase's MCP connector.",
+    "description": "Let Claude Code query and change your Supabase database: a Management API query script and skill with an opt-in write mode, plus setup notes for Supabase's MCP connector.",
     "homepage": null,
     "has_issues": true,
     "has_projects": true,
@@ -29,12 +29,17 @@
     "sql",
     "supabase"
   ],
-  "security_and_analysis": {},
+  "security_and_analysis": {
+    "secret_scanning": "enabled",
+    "secret_scanning_non_provider_patterns": "disabled",
+    "secret_scanning_push_protection": "enabled",
+    "secret_scanning_validity_checks": "disabled"
+  },
   "dependabot": {
     "alerts": false,
     "security_updates": false
   },
-  "private_vulnerability_reporting": false,
+  "private_vulnerability_reporting": true,
   "actions": {
     "permissions": {
       "enabled": true,
