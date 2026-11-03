@@ -22,21 +22,23 @@
 # 2026-11-02, not documented: with a Full token the query runs as postgres,
 # outside a read-only transaction, so it can change anything; with a Read-only
 # token it still runs as supabase_read_only_user, and a write is refused. A
-# call whose statement fails rolls back its earlier statements. Pass -w as an
+# call whose statement fails rolls back its earlier statements, and an insert,
+# update or delete ending in `returning ...` prints those rows. Pass -w as an
 # argument of its own, never bundled as -rw, so that a permission rule matching
-# the command's text sees every write; the script refuses it bundled.
+# the command's text sees a write written the usual way; the script refuses it
+# bundled. A rule is no boundary: a flag in a variable still gets past it.
 #
 # Credentials. Use a SCOPED personal access token: in the Supabase Dashboard,
 # Account > Access Tokens, pick this one project and Read-only access (the
 # form offered Read-only or Full, nothing per resource, on 2026-11-02). Never
 # use a legacy full-access token here: it can reach every organization and
 # project on the account, including ones created after the token. Write mode
-# needs a second scoped token with Full access, which can also change the
-# project's settings, API keys and backups and its organization's members
-# (the dashboard's token summary, 2026-11-02): give it a short expiry, and
-# revoke it when the writes are done. Each token is read from the environment
-# first, then from the repo root's .env, and is passed to curl on stdin, never
-# on its command line.
+# needs a second scoped token with Full access, which is Read-write on all the
+# dashboard lists: the organization and its members, the project's settings,
+# API keys, backups and more (the dashboard's token summary, 2026-11-02). Give
+# it a short expiry, and revoke it when the writes are done. Each token is read
+# from the environment first, then from the repo root's .env, and is passed to
+# curl on stdin, never on its command line.
 #
 # .env keys (repo root, two levels above this script, gitignored):
 #   SUPABASE_PROJECT_REF    the project ref: Project Settings > General, or the
@@ -64,7 +66,7 @@
 #
 # Several statements in one call return only the last statement's rows
 # (observed 2026-11-02, on both endpoints). A write that returns no rows prints
-# (0 rows).
+# (0 rows), which is no count of the rows it changed.
 #
 # -l and -d read information_schema, which leaves out materialized views.
 #
@@ -244,18 +246,25 @@ HTTP_STATUS="$(
         --data-binary "@$BODY_FILE" \
         -o "$RESPONSE_FILE" \
         -w '%{http_code}'
-)" || die "the request did not complete (curl exit $?)" 1
+)" || {
+    CURL_STATUS=$?
+    echo "error: the request did not complete (curl exit $CURL_STATUS)" >&2
+    if [[ "$WRITE" -eq 1 ]]; then
+        echo "hint: the write may have been applied; check with a select before retrying" >&2
+    fi
+    exit 1
+}
 
 if [[ ! "$HTTP_STATUS" =~ ^2 ]]; then
     MESSAGE="$("${JQ[@]}" -r '.message // .error // . | tostring' "$RESPONSE_FILE" 2>/dev/null ||
         cat "$RESPONSE_FILE")"
     echo "error: HTTP $HTTP_STATUS: $MESSAGE" >&2
+    # Matched on the message, not the status: the refusal came as HTTP 400 on
+    # 2026-11-02, a status the API's OpenAPI spec does not list.
+    if [[ "$WRITE" -eq 1 && "$MESSAGE" == *"read-only transaction"* ]]; then
+        echo "hint: $TOKEN_KEY looks like a Read-only token; write mode needs a Full one" >&2
+    fi
     case "$HTTP_STATUS" in
-        400)
-            if [[ "$WRITE" -eq 1 && "$MESSAGE" == *"read-only transaction"* ]]; then
-                echo "hint: $TOKEN_KEY looks like a Read-only token; write mode needs a Full one" >&2
-            fi
-            ;;
         401) echo "hint: $TOKEN_KEY is wrong, expired or revoked" >&2 ;;
         403) echo "hint: $TOKEN_KEY lacks Database access on project $PROJECT_REF" >&2 ;;
         404) echo "hint: check SUPABASE_PROJECT_REF; the query endpoints are beta" >&2 ;;
@@ -280,6 +289,9 @@ fi
 ROW_COUNT="$("${JQ[@]}" 'length' "$RESPONSE_FILE")"
 if [[ "$ROW_COUNT" -eq 0 ]]; then
     echo "(0 rows)"
+    if [[ "$WRITE" -eq 1 ]]; then
+        echo "hint: a write reports no row count; end it with returning ..., or select afterwards, to see what changed" >&2
+    fi
     if [[ "$MODE" == describe ]]; then
         echo "hint: no such table, a materialized view (not in information_schema), or no privilege on it" >&2
     fi

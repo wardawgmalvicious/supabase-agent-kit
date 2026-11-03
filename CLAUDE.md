@@ -73,10 +73,12 @@ not cover `env`, bare `printenv`, `declare -p`, `Get-ChildItem Env:`,
 - **`-w` is the one way to write**: it posts to `/database/query` with a
   second, Full token, `SUPABASE_ACCESS_TOKEN_RW`, and runs as `postgres`
   (observed 2026-11-02). Its gates are that key's absence by default, the
-  skill's yes to the exact SQL, and the `Bash(*supabase-query.sh*-w*)`
-  ask rule in `.claude/settings.json`, which the README tells installers
-  to copy. The script refuses `-w` bundled with another flag so the rule
-  always sees it; keep that check in any change to the arguments.
+  skill's yes to the exact SQL, and the `Bash(...)` and `PowerShell(...)`
+  ask rules on `*supabase-query.sh*-w*` in `.claude/settings.json`, which
+  the README tells installers to copy. The script refuses `-w` bundled
+  with another flag so the rules see the usual form; a flag in a variable
+  still gets past them, as a rule is no boundary. Keep that check in any
+  change to the arguments.
 - **Secrets and payloads stay off argv.** The token reaches curl as a
   header on stdin (`-H @-`); the SQL reaches jq on stdin and curl through
   a temp file. This avoids the process list and Windows' 32,767-character

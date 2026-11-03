@@ -42,7 +42,7 @@ and turn a schema change into a migration rather than a write.
    account, including ones created later, so don't use one here.
 3. Copy `.env.sample` to `.env` at the repo root, fill in both values, and make sure `.env`
    is gitignored.
-4. Keep Claude Code from reading `.env`, and have it ask before any write: add these rules
+4. Keep Claude Code from reading `.env`, and have it ask before a write: add these rules
    to your repo's `.claude/settings.json`, merging them into any `permissions` block already
    there. The script reads `.env` itself, so it keeps working.
 
@@ -50,14 +50,19 @@ and turn a schema change into a migration rather than a write.
    {
      "permissions": {
        "deny": ["Read(./.env)"],
-       "ask": ["Bash(*supabase-query.sh*-w*)"]
+       "ask": [
+         "Bash(*supabase-query.sh*-w*)",
+         "PowerShell(*supabase-query.sh*-w*)"
+       ]
      }
    }
    ```
 
    The deny rule stops Claude's file tools and commands that name the file, such as
-   `cat .env`; it doesn't reach a `grep -r` over the folder. The ask rule prompts before each
-   [write mode](#write-mode) call, and also when `-w` merely appears in the SQL.
+   `cat .env`; it doesn't reach a `grep -r` over the folder. The ask rules prompt before a
+   [write mode](#write-mode) call written the usual way, from either shell tool, and also when
+   `-w` merely appears in the SQL. A rule is no security boundary: a flag held in a variable
+   gets past it.
 5. Check it: `scripts/db/supabase-query.sh -q "select 1 as ok"`.
 6. In Claude Code, ask a question about your data, such as "how many orders came in last
    week?". The skill fires and Claude runs the query.
@@ -102,17 +107,19 @@ its behavior may change.
 out and the kit stays read-only: `-w` then exits `2`.
 
 - **The token must be Full access** for this one project, since Read-only is the only other
-  choice. A Full token can also change the project's settings, API keys and backups and its
-  organization's members (the dashboard's token summary, 2026-11-02), so give it a short
-  expiry, keep it off production projects, and revoke it when the writes are done.
+  choice. A Full token is Read-write on everything the dashboard lists: the organization,
+  its members and settings, and the project's settings, API keys, backups and more (the
+  dashboard's token summary, 2026-11-02). Give it a short expiry, keep it off production
+  projects, and revoke it when the writes are done.
 - **A write runs as `postgres`**, outside a read-only transaction, so it can change any
-  table. A call whose statement fails rolls back its earlier statements, and a write that
-  returns no rows prints `(0 rows)`. Observed 2026-11-02, not documented.
+  table. A call whose statement fails rolls back its earlier statements. A write ending in
+  `returning ...` prints those rows; without one it prints `(0 rows)`, which is no count.
+  Observed 2026-11-02, not documented.
 - **The skill writes data only**: an insert, update or delete you asked for, after you
   approve the exact SQL. A schema change still goes in a migration, since DDL run here skips
   Supabase's migration history.
-- **Pass `-w` on its own**, never bundled as `-rw`: the script refuses that, so the ask rule
-  in step 4 always sees a write.
+- **Pass `-w` on its own**, never bundled as `-rw`: the script refuses that, so the ask rules
+  in step 4 see the usual form of a write.
 
 ## The pattern
 
