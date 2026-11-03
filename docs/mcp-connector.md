@@ -55,6 +55,31 @@ for approval first. A query ran as `supabase_read_only_user` with `transaction_r
 on, and `create temp table` was refused with `cannot execute CREATE TABLE in a read-only
 transaction`.
 
+The other nine tools each ran once the same day, under `read_only=true`, on a project with
+one table and no migrations:
+
+- `list_tables`: `["public"]` listed the one table with its RLS flag and row count, and `[]`
+  listed all 42 in `auth`, `realtime`, `storage`, `vault` and `public`, each one readable
+  by the read-only user ([below](#before-you-connect-it)). The tool's schema requires
+  `schemas` and declares `public` its default, while its description says all schemas.
+- `list_extensions`: all 78 extensions the project offers, the 5 installed carrying an
+  `installed_version`.
+- `list_migrations`: `{"migrations":[]}`.
+- `query_logs`: asked for approval first, each call. It read seven sources, `auth_logs`,
+  `edge_logs`, `pgbouncer_logs`, `postgres_logs`, `postgrest_logs`, `realtime_logs` and
+  `storage_logs`. A 49-hour window was refused with `The log window can be at most 24
+  hours.`, and its description gives the last 24 hours as the default. How far back a
+  window may start is untested.
+- `get_advisors`: `security` returned one INFO lint, `rls_enabled_no_policy`, and
+  `performance` returned none.
+- `get_project_url`: `https://<ref>.supabase.co`.
+- `get_publishable_keys`: two keys, the legacy `anon` JWT, whose `role` claim is `anon`, and
+  one `sb_publishable_` key. Neither is a secret or `service_role` key.
+- `generate_typescript_types`: about 170 lines of TypeScript for the one table, from the
+  `public` schema alone.
+- `search_docs`: a GraphQL `searchDocs` query, which takes no project argument, returned
+  the Row Level Security guide's title and link.
+
 To connect it for yourself in one repo, with nothing committed, `claude mcp add` stores it in
 your local scope instead, with the ref written in:
 
@@ -105,3 +130,7 @@ Supabase's own guidance, condensed:
 - **It acts as you.** Never hand the connector to customers or end users.
 
 Source: [Supabase MCP docs](https://supabase.com/docs/guides/ai-tools/mcp), read 2026-11-02.
+
+**Read-only is not row-scoped.** The read-only user is a member of `pg_read_all_data` and has
+`BYPASSRLS` (observed 2026-11-02), so a query reads every row a policy would hide,
+`auth.users` included.
