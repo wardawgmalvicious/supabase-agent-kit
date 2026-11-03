@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Check that the query script's flags, exit codes and row cap are described in
 # all three of its homes: the script's header block (its -h output), README.md
-# and the query-supabase SKILL.md. It enforces CLAUDE.md's "Keeping the docs in
-# step", and runs as the docs-in-step pre-commit hook.
+# and the query-supabase SKILL.md. It enforces "Keeping the docs in step" in
+# .claude/rules/query-script.md, and runs as the docs-in-step pre-commit hook.
 #
 # Why facts, not wording: the three are prose written for different readers, so
 # the check reads whether each names a fact, never how it phrases it. A failure
@@ -137,7 +137,7 @@ for source_name in header README.md; do
 done
 
 if [[ "$GAPS" -gt 0 ]]; then
-    echo "hint: CLAUDE.md, 'Keeping the docs in step'; update the doc, or this check's pattern if only the wording moved" >&2
+    echo "hint: .claude/rules/query-script.md, 'Keeping the docs in step'; update the doc, or this check's pattern if only the wording moved" >&2
     exit 1
 fi
 echo "docs in step: flags ${FLAGS}, exit codes ${CODES//$'\n'/ }, row cap $CAP"

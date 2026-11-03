@@ -21,6 +21,10 @@ in the target repo. The script finds `.env` at `SCRIPT_DIR/../..`, so
 moving or renaming `scripts/db/` breaks every install. The skill also
 fires in this repo itself, against whatever project `.env` points at.
 
+How the script works, and how its three descriptions stay in step, are
+in `.claude/rules/query-script.md`, which loads on a Read of the script,
+the README or `SKILL.md`.
+
 ## Commands
 
 No build and no test suite. Lint and format-check the script (both pass
@@ -52,7 +56,9 @@ Never read, print or echo `.env` or the token. `.claude/settings.json`
 denies `Read(./.env)`, `printenv`, `echo` and `printf` commands that name
 `SUPABASE_ACCESS_TOKEN`, and any PowerShell command that names it. It does
 not cover `env`, bare `printenv`, `declare -p`, `Get-ChildItem Env:`,
-`sh -c '…'`, a `grep -r` or a script.
+`sh -c '…'`, a `grep -r` or a script. README setup step 4 tells
+installers to copy the `.env` deny rule and the `-w` ask rules, so
+change it with them.
 
 ## MCP servers
 
@@ -68,55 +74,6 @@ not cover `env`, bare `printenv`, `declare -p`, `Get-ChildItem Env:`,
 - `github-mcp`, this repo's own tooling, not part of the kit. It sends
   `GITHUB_PAT_PERSONAL` as its bearer token, and `.claude/settings.json`
   allows its three read-only tools unprompted.
-
-## How the script works
-
-- **Read-only is enforced by Postgres, not by the script.** The endpoint
-  runs queries as `supabase_read_only_user` in a read-only transaction.
-  Don't add SQL filtering as a "safety" layer; it would imply a guarantee
-  the script doesn't make.
-- **`-w` is the one way to write**: it posts to `/database/query` with a
-  second, Full token, `SUPABASE_ACCESS_TOKEN_RW`, and runs as `postgres`
-  (observed 2026-11-02). Its gates are that key's absence by default, the
-  skill's yes to the exact SQL, and the `Bash(...)` and `PowerShell(...)`
-  ask rules on `*supabase-query.sh*-w*` in `.claude/settings.json`, which
-  the README tells installers to copy. The script refuses `-w` bundled
-  with another flag so the rules see the usual form; a flag in a variable
-  still gets past them, as a rule is no boundary. Keep that check in any
-  change to the arguments.
-- **Secrets and payloads stay off argv.** The token reaches curl as a
-  header on stdin (`-H @-`); the SQL reaches jq on stdin and curl through
-  a temp file. This avoids the process list and Windows' 32,767-character
-  command-line limit. Keep it that way in any change.
-- `.env` is read key by key with `grep`/`cut`, never sourced. Environment
-  variables override it.
-- jq gets `-b` under Git Bash (`OSTYPE` `msys*` or `cygwin*`), or its
-  output is CRLF.
-- The table view uses `join("\t")`, not `@tsv`, because `@tsv` doubles
-  backslashes. It caps at `SUPABASE_QUERY_MAX_ROWS` (default 200); `-r`
-  is never capped.
-- Exit codes are a contract the skill relies on: `0` result, `1` refused
-  by the API or Postgres, `2` usage or missing setting.
-- `-d` validates `schema.table` as plain identifiers and does not quote
-  them, because it interpolates them into SQL.
-
-## Keeping the docs in step
-
-The script's header block doubles as `-h` output (the `usage()` function
-prints from `# Run read-only SQL` to the first blank line), so keep that
-block contiguous.
-
-Behavior is described in three places: the script header, the README,
-and `SKILL.md`. A change to flags, exit codes, the row cap or observed
-endpoint behavior needs all three updated. `scripts/dev/check-docs-in-step.sh`
-checks the flags, exit codes and row cap, and that `-h` prints the whole
-header, with its exceptions listed in the script; observed behavior and
-its dates it does not check. Observed, undocumented
-behavior is dated (for example "observed 2026-11-02"); keep that
-convention, and re-date a claim when you re-test it. The endpoint is
-marked beta by Supabase.
-
-`*.sh` is pinned to LF in `.gitattributes`.
 
 ## Handoff briefs
 
