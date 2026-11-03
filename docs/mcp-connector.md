@@ -68,9 +68,9 @@ table in `public` and no migrations:
 - `query_logs`: asked for approval first, each call. Grouped by `source` over the default
   window, it returned seven sources with rows, `auth_logs`, `edge_logs`, `pgbouncer_logs`,
   `postgres_logs`, `postgrest_logs`, `realtime_logs` and `storage_logs`; its description
-  calls its list of sources not exhaustive. A 49-hour window was refused with `The log window can be at most 24
-  hours.`, and its description gives the last 24 hours as the default. How far back a
-  window may start is untested.
+  calls its list of sources not exhaustive. A 49-hour window was refused with `The log
+  window can be at most 24 hours.`, and the description gives the last 24 hours as the
+  default. How far back a window may start is untested.
 - `get_advisors`: `security` returned one INFO lint, `rls_enabled_no_policy`, and
   `performance` returned none.
 - `get_project_url`: `https://<ref>.supabase.co`.
