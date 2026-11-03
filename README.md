@@ -149,9 +149,11 @@ scripts/db/supabase-migration-sql.sh supabase/migrations/20261102120000_create_d
 - **The helper only prints**, so the write stays in the command's text,
   where the ask rules in step 4 see it.
 - **It refuses** a file outside `supabase/migrations/`, a name not of the
-  CLI's `<14-digit version>_<name>.sql` form, and `begin`, `commit`,
-  `rollback` or `concurrently`, which split the one transaction or
-  cannot run in it. Its header block has the details.
+  CLI's `<14-digit version>_<name>.sql` form, a file with no SQL or no
+  final `;`, and transaction control (`begin`, `start transaction`,
+  `commit`, `rollback`, `abort`) or `concurrently`, which split the one
+  transaction or cannot run in it. Its header block has the details,
+  and the valid SQL its light scan also refuses.
 - **The files and rows take the Supabase CLI's form**, so
   `supabase migration list` and `supabase db push` read them.
 - **The same pipe without `-w` dry-runs the syntax.** A read-only call

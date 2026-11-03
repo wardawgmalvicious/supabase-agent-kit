@@ -49,7 +49,9 @@
 # and dollar-quoted bodies blanked out, so a PL/pgSQL begin ... end inside
 # $$ ... $$ passes. It is a light scan, not Postgres's lexer: an E'...' string
 # holding \' can mislead it, and end, COMMIT's other name, goes unchecked,
-# since case ... end shares it.
+# since case ... end shares it. It also refuses some valid SQL, failing safe:
+# a nested /* /* */ */ comment ends at its first */, and on commit drop, on a
+# temporary table, reads as commit.
 #
 # Usage:
 #   scripts/db/supabase-migration-sql.sh supabase/migrations/20261102120000_create_demo.sql
@@ -139,9 +141,12 @@ ltrimstr("﻿") as $sql
 | ($sql | sub("^\\s+"; "") | sub("[\\s;]+\\z"; "")) as $statement
 
 # A dollar-quote tag the file does not hold, so the element needs no escaping.
-| (first(range(0; 1000) | "$migration\(if . == 0 then "" else "_\(.)" end)$"
-         | select(. as $tag | $sql | contains($tag) | not))
-   // refuse("no free dollar-quote tag")) as $tag
+# The check leaves off the closing $: a file ending in $migration would
+# otherwise run on into the closing tag and end the quote early.
+| (first(range(0; 1000) | "$migration\(if . == 0 then "" else "_\(.)" end)"
+         | select(. as $open | $sql | contains($open) | not))
+   // refuse("no free dollar-quote tag")) as $open
+| "\($open)$" as $tag
 
 | "-- \($version)_\($name).sql and its history row, printed by supabase-migration-sql.sh\n"
   + "create schema if not exists supabase_migrations;\n"

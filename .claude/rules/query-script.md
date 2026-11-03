@@ -61,8 +61,10 @@ paths:
   leaves by `halt_error` with exit 2.
 - **Names and versions are validated, not quoted**: the filename's
   `<version>` and `<name>` reach the SQL as literals, so `<name>` is
-  limited to letters, digits, `_` and `-`. The file's SQL sits in a
-  dollar quote whose tag the file does not hold.
+  limited to letters, digits, `_` and `-`. The history copy of the
+  file's SQL, `statements`, sits in a dollar quote whose tag the file
+  does not hold; the SQL that runs is printed as written, so the scan,
+  not the quote, is what keeps transaction control out.
 
 ## Keeping the docs in step
 

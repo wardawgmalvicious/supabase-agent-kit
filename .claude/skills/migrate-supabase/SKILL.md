@@ -24,8 +24,9 @@ call, so the user's ask rule on `supabase-query.sh -w` still prompts.
 
 1. **Check the history against the files.** Exit 1 with `relation
    "supabase_migrations.schema_migrations" does not exist` means nothing
-   is recorded yet. Otherwise compare the versions with the files in
-   `supabase/migrations/`, and stop for the user on:
+   is recorded yet, so every file in `supabase/migrations/` counts as
+   not recorded. Compare the versions with the files, and stop for the
+   user on:
    - **a version recorded with no file**: a change this repo doesn't
      hold, made from elsewhere;
    - **a file not recorded, older than the last version recorded**: it
@@ -48,8 +49,10 @@ call, so the user's ask rule on `supabase-query.sh -w` still prompts.
      docs say a table there without it "is readable and writable by any
      role with a grant on it" (read 2026-11-02). Add policies only for
      access the user asked for.
-   - **No `begin`, `commit`, `rollback` or `concurrently`**: the batch is
-     one transaction, and the helper refuses them.
+   - **No transaction control or `concurrently`**: `begin`, `start
+     transaction`, `commit`, `rollback` and `abort` would split the
+     batch's one transaction, and the helper refuses them. Its light
+     scan also refuses `on commit drop` and nested `/* */` comments.
    - End every statement with `;`.
 4. **Check it**: run the helper alone, output to `/dev/null`. Exit 2
    names what it refuses; fix the file and check again. Then dry-run its
@@ -60,7 +63,10 @@ call, so the user's ask rule on `supabase-query.sh -w` still prompts.
    a read-only transaction`, having changed nothing (observed
    2026-11-02). A missing table or column shows only on the real apply.
 5. **Show the file and wait for the user's yes.** Show its whole text
-   and the command that applies it. No yes, no apply.
+   and the command that applies it. No yes, no apply. The ask rule's
+   prompt shows only the file's path, so the yes covers the text you
+   showed: never edit the file between the yes and the apply, and show
+   it again if it changed.
 6. **Apply it once**, by the pipe. Its output is the history row,
    `version` and `name`: the change and the row landed together.
 7. **Verify**: `-l` or `-d schema.table` on what changed, and select its
