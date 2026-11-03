@@ -48,6 +48,13 @@ To use it in your own repo:
 5. Approve the `supabase` server when Claude Code asks. Then run `/mcp`, pick `supabase`,
    choose **Authenticate**, sign in to Supabase in the browser, and pick the organization.
 
+Tested 2026-11-02 from this repo against a free-tier project: the OAuth sign-in worked, and
+the session listed only the database, debugging, development and docs tools, with no
+`apply_migration`, account, Edge Functions or feedback tools. Each `execute_sql` call asked
+for approval first. A query ran as `supabase_read_only_user` with `transaction_read_only`
+on, and `create temp table` was refused with `cannot execute CREATE TABLE in a read-only
+transaction`.
+
 To connect it for yourself in one repo, with nothing committed, `claude mcp add` stores it in
 your local scope instead, with the ref written in:
 
