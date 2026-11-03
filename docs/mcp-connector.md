@@ -55,8 +55,8 @@ for approval first. A query ran as `supabase_read_only_user` with `transaction_r
 on, and `create temp table` was refused with `cannot execute CREATE TABLE in a read-only
 transaction`.
 
-The other nine tools each ran once the same day, under `read_only=true`, on a project with
-one table and no migrations:
+The other nine tools each ran the same day, under `read_only=true`, on a project with one
+table in `public` and no migrations:
 
 - `list_tables`: `["public"]` listed the one table with its RLS flag and row count, and `[]`
   listed all 42 in `auth`, `realtime`, `storage`, `vault` and `public`, each one readable
@@ -65,9 +65,10 @@ one table and no migrations:
 - `list_extensions`: all 78 extensions the project offers, the 5 installed carrying an
   `installed_version`.
 - `list_migrations`: `{"migrations":[]}`.
-- `query_logs`: asked for approval first, each call. It read seven sources, `auth_logs`,
-  `edge_logs`, `pgbouncer_logs`, `postgres_logs`, `postgrest_logs`, `realtime_logs` and
-  `storage_logs`. A 49-hour window was refused with `The log window can be at most 24
+- `query_logs`: asked for approval first, each call. Grouped by `source` over the default
+  window, it returned seven sources with rows, `auth_logs`, `edge_logs`, `pgbouncer_logs`,
+  `postgres_logs`, `postgrest_logs`, `realtime_logs` and `storage_logs`; its description
+  calls its list of sources not exhaustive. A 49-hour window was refused with `The log window can be at most 24
   hours.`, and its description gives the last 24 hours as the default. How far back a
   window may start is untested.
 - `get_advisors`: `security` returned one INFO lint, `rls_enabled_no_policy`, and
