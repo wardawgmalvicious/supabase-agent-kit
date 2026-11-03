@@ -33,6 +33,11 @@ shfmt -d -i 4 -ci scripts/db/supabase-query.sh
 scripts/dev/check-docs-in-step.sh
 ```
 
+`.github/workflows/pre-commit.yml` runs the same hooks on every push to
+`main` and every pull request, and scans every commit with gitleaks in a
+step of its own, since the hook scans only the index. A `main` ruleset
+blocks force pushes and deletion; landing is still a fast-forward push.
+
 `scripts/dev/` is this repo's tooling, not part of the kit.
 
 The only end-to-end test is a live call, which needs a filled-in `.env`

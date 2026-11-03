@@ -1,0 +1,56 @@
+# Runs the repo's pre-commit hooks on the server, for every push to main
+# and every pull request. The hooks gate only a clone where
+# `pre-commit install` ran, so without this a clone lacking them, an
+# outside pull request or a commit made in GitHub's UI skips them all.
+#
+# Hooks that read files outside the repo (identity-guard, lint-briefs)
+# skip with a line when those files are absent, as they are here, so the
+# config runs unchanged. shellcheck is on the runner image; shfmt is
+# installed below so its hook checks rather than skips.
+#
+# gitleaks runs as its own step, not as the hook: the hook scans the
+# index (`gitleaks git --pre-commit --staged`), which is empty in CI, so
+# under `run --all-files` it passes having scanned nothing. The step scans
+# every commit instead, so it needs the full history (fetch-depth 0). The
+# binary is the release the hook pins, v8.30.1, checked against the
+# SHA-256 its release's checksums file listed on 2026-11-02.
+#
+# Every `uses:` is pinned to a full commit SHA, its tag kept as a comment.
+# The image is pinned too: ubuntu-latest moves to 26.04 during 2026-11,
+# and with it the shfmt version that judges the formatting.
+name: pre-commit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  pre-commit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GITLEAKS_VERSION: 8.30.1
+      GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install shfmt
+        run: sudo apt-get update -q && sudo apt-get install -y -q shfmt
+      - name: Scan every commit for secrets (gitleaks)
+        run: |
+          tarball="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfL -o "$RUNNER_TEMP/$tarball" \
+              "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$tarball"
+          printf '%s  %s\n' "$GITLEAKS_SHA256" "$RUNNER_TEMP/$tarball" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$tarball" -C "$RUNNER_TEMP" gitleaks
+          "$RUNNER_TEMP/gitleaks" git --redact --no-banner .
+      - name: Run every other hook on every file
+        env:
+          SKIP: gitleaks
+        run: pipx run pre-commit run --all-files --show-diff-on-failure
